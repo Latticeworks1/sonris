@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SONRIS blocked serial check</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
+  h2 { color: #aef; }
+  #status { color: #fa0; margin-bottom: 12px; }
+  #results { white-space: pre; line-height: 1.6; }
+  .yes { color: #4f4; }
+  .no  { color: #888; }
+  .err { color: #f44; }
+  #copy { margin-top: 16px; padding: 6px 14px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; }
+</style>
+</head>
+<body>
+<h2>SONRIS — checking serials via puter.js proxy</h2>
+<div id="status">Initialising…</div>
+<div id="results"></div>
+<button id="copy" style="display:none" onclick="copyResults()">Copy results</button>
+
+<script src="https://js.puter.com/v2/"></script>
+<script>
+const SERIALS = [7921,155058,139256,141150,188792,79131,130262,126711,227277,204556,972736,972946,973159,202169,136111,13843,231598,233257,12031,139848,85667,93888,204158,202814,6756,25007,224248,204555,94523,55648,251035,25898,14671,10807,209296,8409,155006,52082,128694,127901,92790,12255,123221,51116,95521,103260,102367,112243,96067,24410,62877,61541,9441,10808,61738,60600,57251,93141,48206,94131,12313,93729,24179,154726,152968,155168,139587,46642,94524,14224,118476,119605,8760,74242,122594,123217,135455,136089,120320,100986,221219,77477,76719,49590,94510,26615,101618,23664,90603,970444,123094,122595,234883,233789,23980,101619,152967,13138,234884,233856,189265,25276,89778,86180,96057,64972,63738,56266,93140,212549,26287,200110,25427,970445,223731,50325,24651,89280,128271,127900,15431,75653,96838,21899,971021,237653,221220,29121,136277,135991,82374,81511,102916,102228,180542,202170,202171,26854,251034,16498,95060,94283,223730,225129,972709,94465,17975,136546,136112,150224,221256,139847,221255,239972,157362,103446,126657,27599,185039,157788,107720,49236,27098,112867,970975,122785,225395,221667,225007,225006,223798,97770,109767,30768,223717,235998,131106,171283,108230,135323,114682,52958,52502,164952,160629,189523,57130,216884,217960,30991,213155,212887,198734,241346,118601,191040,215313,973209,226293,216999,183495,185810,216754,249468,228628,95313,14451,169649,168911,164900,126052,78478,217519,92887,60116,63185,179811,231306,232457,137739,124713,139879,221283,237021,76234,166573,229616,227795,196964,67872,52225,59191,80262,145506,237939,199173,158104,160820,211097,240968,192758,217572,77974,217804,224176,67161,970864,971087,224253,142429,212987,212997,137513,158105,160284,211841,213718,184137,138086,214115,141316,235887,106793,211112,178164,972275,213023,250396,249320,212019,49603,225283,972200,209551,231077,128516,214166,972409,140329,138221,96789,107477,228063,217752,212894,212878,211113,233719,151750,164317,78539,72497,212882,188421,114760,178644,175582,138903,23584,25899,73971,129383,248233,235706,234559,202449,224861,245258,210248,218325,219067,196982,213208,199464,186758,145904,30776,27055,124219,184612,105932,131105,144007,151309,200295,183686,147312,62819,25466,233132,206251,182082,122126,234869,235812,231320,169436,164407,24807,160906,137698,120850,24276,166461,195132,35969,70179,23908,23691,126863,45919,158513,214305];
+
+const DOC_SEARCH   = 'https://sonlite.dnr.state.la.us/ords/r/sonris_pub/document_access/finddocuments';
+const DOC_RESULTS  = 'https://sonlite.dnr.state.la.us/ords/r/sonris_pub/document_access/findalldocumentsresults';
+
+const lines = {};
+function render() {
+    const el = document.getElementById('results');
+    el.innerHTML = SERIALS.map(s => {
+        const v = lines[s];
+        if (!v) return `<span style="color:#555">${s}: pending</span>`;
+        const cls = v === 'yes' ? 'yes' : v === 'no' ? 'no' : 'err';
+        return `<span class="${cls}">${s}: ${v}</span>`;
+    }).join('\n');
+}
+
+async function checkSerial(serial) {
+    const r = await puter.net.fetch(
+        `${DOC_SEARCH}?idx=xwellserialnumber&val=${serial}`,
+        {redirect: 'follow'}
+    );
+    const html = await r.text();
+
+    // finddocuments either embeds results or links to findalldocumentsresults
+    const piM = html.match(/findalldocumentsresults\/?(\d+)/);
+    let body = html;
+    if (piM) {
+        const r2 = await puter.net.fetch(
+            `${DOC_RESULTS}/${piM[1]}`,
+            {redirect: 'follow'}
+        );
+        body = await r2.text();
+    }
+    // also check if the redirect landed on findalldocumentsresults
+    if (r.url && r.url.includes('findalldocumentsresults') && body === html) {
+        // body already contains the results page
+    }
+    return /WELL\s*LOG/i.test(body) ? 'yes' : 'no';
+}
+
+function copyResults() {
+    const text = SERIALS.filter(s => lines[s] === 'yes').join('\n');
+    navigator.clipboard.writeText(text);
+    document.getElementById('copy').textContent = 'Copied!';
+}
+
+async function main() {
+    document.getElementById('status').textContent = `Checking ${SERIALS.length} serials…`;
+
+    for (const serial of SERIALS) {
+        try {
+            lines[serial] = await checkSerial(serial);
+        } catch(e) {
+            lines[serial] = `error: ${e.message || e}`;
+        }
+        render();
+        await new Promise(r => setTimeout(r, 600));
+    }
+
+    const withLogs = SERIALS.filter(s => lines[s] === 'yes');
+    document.getElementById('status').textContent =
+        `Done. ${withLogs.length} of ${SERIALS.length} have logs.`;
+    document.getElementById('copy').style.display = 'inline';
+}
+
+main();
+</script>
+</body>
+</html>

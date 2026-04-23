@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# Session cookies — contain live APEX session tokens
+.sonris_cookies.json
+
+# Bulk-download outputs (can be large)
+sonris_data/
+well-logs-ig*.csv
+
+# Command output files
+aor_wells.csv
+search_aor.csv
+well_depths.csv
+wells_map.html
+*_results.csv
+test_filtered.csv
+test_well_info.csv
+
+# Downloaded document batches
+*_logs/
+*_docs/
+
+# macOS metadata
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code project files
+.claude/
