@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.git/
+.claude/
+sonris_data/
+*_logs/
+*_docs/
+well-logs-ig*.csv
+*.xlsx
+.gitignore
+README.md
+check_blocked.html
+parish.csv
+test_serials.csv

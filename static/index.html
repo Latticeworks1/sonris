@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SONRIS</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; background: #0e0e0e; color: #d0d0d0; padding: 28px 32px; }
+h1 { font-size: 1rem; color: #7ab; margin-bottom: 22px; letter-spacing: .08em; text-transform: uppercase; }
+
+.tabs { display: flex; gap: 2px; margin-bottom: 22px; border-bottom: 1px solid #222; }
+.tab { padding: 6px 20px; background: none; border: 1px solid transparent;
+       border-bottom: none; cursor: pointer; color: #666; font-family: monospace;
+       font-size: .82rem; letter-spacing: .04em; }
+.tab:hover { color: #aaa; }
+.tab.active { color: #ccc; border-color: #2a2a2a; background: #141414; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+label { display: block; font-size: .75rem; color: #666; margin-bottom: 4px; margin-top: 14px; }
+input[type=text], input[type=number] {
+  background: #141414; border: 1px solid #2a2a2a; color: #ccc;
+  padding: 6px 10px; font-family: monospace; font-size: .82rem;
+}
+input[type=file] {
+  background: #141414; border: 1px solid #2a2a2a; color: #888;
+  padding: 5px 8px; font-family: monospace; font-size: .78rem; width: 100%; max-width: 380px;
+}
+.row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+.row > div { display: flex; flex-direction: column; }
+
+button {
+  margin-top: 16px; padding: 7px 22px;
+  background: #152030; border: 1px solid #2a4a6a;
+  color: #7ab; font-family: monospace; font-size: .82rem; cursor: pointer;
+}
+button:hover { background: #1c2f44; }
+button:disabled { opacity: .35; cursor: default; }
+
+.status { margin-top: 12px; font-size: .78rem; color: #fa0; min-height: 1.1em; }
+
+.table-wrap { margin-top: 18px; overflow-x: auto; max-height: 460px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .78rem; }
+th { background: #111; color: #7ab; text-align: left; padding: 6px 12px;
+     border-bottom: 1px solid #222; white-space: nowrap; position: sticky; top: 0; }
+td { padding: 5px 12px; border-bottom: 1px solid #191919; vertical-align: top; white-space: nowrap; }
+td.wrap { white-space: normal; max-width: 320px; }
+tr:hover td { background: #131313; }
+.yes { color: #5d5; }
+.no  { color: #555; }
+
+.check-group { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
+.check-group label { display: flex; align-items: center; gap: 5px; font-size: .8rem;
+                     color: #999; margin: 0; cursor: pointer; }
+.check-group input[type=checkbox] { accent-color: #7ab; }
+
+#map { width: 100%; height: 380px; margin-top: 18px; border: 1px solid #222; }
+
+a.dl { color: #7ab; font-size: .82rem; text-decoration: underline; cursor: pointer; }
+
+.none { color: #444; font-size: .8rem; margin-top: 14px; }
+</style>
+</head>
+<body>
+<h1>SONRIS</h1>
+
+<div class="tabs">
+  <div class="tab active"  onclick="switchTab('search')">search</div>
+  <div class="tab"         onclick="switchTab('check')">batch check</div>
+  <div class="tab"         onclick="switchTab('aor')">aor</div>
+</div>
+
+<!-- ── search ─────────────────────────────────────────────────────────── -->
+<div id="panel-search" class="panel active">
+  <label>well serial number</label>
+  <div class="row">
+    <input type="text" id="s-serial" placeholder="e.g. 7921" style="width:180px"
+           onkeydown="if(event.key==='Enter')runSearch()">
+    <button onclick="runSearch()">search</button>
+  </div>
+  <div class="status" id="s-status"></div>
+  <div class="table-wrap" id="s-results"></div>
+</div>
+
+<!-- ── batch check ────────────────────────────────────────────────────── -->
+<div id="panel-check" class="panel">
+  <label>CSV file</label>
+  <input type="file" id="c-file" accept=".csv">
+
+  <label>serial column (header name or 0-based index)</label>
+  <input type="text" id="c-col" value="0" style="width:200px">
+
+  <label>fields to append</label>
+  <div class="check-group">
+    <label><input type="checkbox" value="has_logs"         checked> has_logs</label>
+    <label><input type="checkbox" value="log_count"        checked> log_count</label>
+    <label><input type="checkbox" value="log_descriptions">          log_descriptions</label>
+    <label><input type="checkbox" value="has_docs">                  has_docs</label>
+    <label><input type="checkbox" value="doc_count">                 doc_count</label>
+    <label><input type="checkbox" value="doc_types">                 doc_types</label>
+  </div>
+
+  <button onclick="runCheck()">run check</button>
+  <div class="status" id="c-status"></div>
+  <div id="c-result" style="margin-top:12px"></div>
+</div>
+
+<!-- ── aor ────────────────────────────────────────────────────────────── -->
+<div id="panel-aor" class="panel">
+  <div class="row">
+    <div>
+      <label>latitude</label>
+      <input type="number" id="a-lat" placeholder="30.4500" step="0.0001" style="width:140px">
+    </div>
+    <div>
+      <label>longitude</label>
+      <input type="number" id="a-lon" placeholder="-91.1800" step="0.0001" style="width:140px">
+    </div>
+    <div>
+      <label>radius (miles)</label>
+      <input type="number" id="a-radius" value="2.0" min="0.1" max="50" step="0.1" style="width:100px">
+    </div>
+    <div style="flex-direction:row;align-items:center;gap:7px;padding-bottom:2px">
+      <input type="checkbox" id="a-logs" style="accent-color:#7ab">
+      <label for="a-logs" style="margin:0;font-size:.8rem;color:#999;cursor:pointer">logs only</label>
+    </div>
+  </div>
+  <button onclick="runAOR()">search</button>
+  <div class="status" id="a-status"></div>
+  <div id="map"></div>
+  <div class="table-wrap" id="a-results"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let leafletMap = null;
+
+function switchTab(name) {
+  const names = ['search','check','aor'];
+  document.querySelectorAll('.tab').forEach((t, i) =>
+    t.classList.toggle('active', names[i] === name));
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'panel-' + name));
+  if (name === 'aor' && !leafletMap) initMap();
+}
+
+function initMap() {
+  leafletMap = L.map('map').setView([30.5, -91.5], 8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18
+  }).addTo(leafletMap);
+}
+
+// ── search ──────────────────────────────────────────────────────────────────
+
+async function runSearch() {
+  const serial = document.getElementById('s-serial').value.trim();
+  if (!serial) return;
+  const status = document.getElementById('s-status');
+  const results = document.getElementById('s-results');
+  status.textContent = 'fetching…';
+  results.innerHTML = '';
+  try {
+    const r = await fetch(`/api/docs/${encodeURIComponent(serial)}`);
+    if (!r.ok) throw new Error(await r.text());
+    const docs = await r.json();
+    status.textContent = `${docs.length} document(s) for serial ${serial}`;
+    if (!docs.length) { results.innerHTML = '<p class="none">no documents found</p>'; return; }
+    const cols = ['docname','create_date','doc_type','description'];
+    const head = cols.map(c => `<th>${c}</th>`).join('');
+    const rows = docs.map(d =>
+      `<tr>${cols.map(c => `<td${c==='description'?' class="wrap"':''}>${d[c]||''}</td>`).join('')}</tr>`
+    ).join('');
+    results.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+  } catch(e) { status.textContent = `error: ${e.message}`; }
+}
+
+// ── batch check ──────────────────────────────────────────────────────────────
+
+async function runCheck() {
+  const file = document.getElementById('c-file').files[0];
+  if (!file) { alert('select a CSV file first'); return; }
+  const col  = document.getElementById('c-col').value.trim() || '0';
+  const info = [...document.querySelectorAll('.check-group input:checked')]
+                 .map(el => el.value).join(',');
+  if (!info) { alert('select at least one field'); return; }
+
+  const status = document.getElementById('c-status');
+  const result = document.getElementById('c-result');
+  status.textContent = 'running — this may take a minute for large files…';
+  result.innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('serial_col', col);
+  fd.append('info', info);
+
+  try {
+    const r = await fetch('/api/check', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    status.textContent = 'done';
+    result.innerHTML = `<a class="dl" href="${url}" download="results.csv">download results.csv</a>`;
+  } catch(e) { status.textContent = `error: ${e.message}`; }
+}
+
+// ── aor ──────────────────────────────────────────────────────────────────────
+
+async function runAOR() {
+  const lat    = parseFloat(document.getElementById('a-lat').value);
+  const lon    = parseFloat(document.getElementById('a-lon').value);
+  const radius = parseFloat(document.getElementById('a-radius').value) || 2.0;
+  const logs   = document.getElementById('a-logs').checked;
+  if (isNaN(lat) || isNaN(lon)) { alert('enter lat and lon'); return; }
+
+  if (!leafletMap) initMap();
+  const status  = document.getElementById('a-status');
+  const results = document.getElementById('a-results');
+  status.textContent = `querying wells within ${radius} mi — fetching documents…`;
+  results.innerHTML = '';
+
+  try {
+    const r = await fetch('/api/aor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lon, radius, logs })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const wells = await r.json();
+    status.textContent = `${wells.length} well interval(s) found`;
+    renderAOR(wells, lat, lon);
+  } catch(e) { status.textContent = `error: ${e.message}`; }
+}
+
+function renderAOR(wells, clat, clon) {
+  leafletMap.eachLayer(l => {
+    if (l instanceof L.CircleMarker || l instanceof L.Circle) l.remove();
+  });
+
+  if (!wells.length) {
+    document.getElementById('a-results').innerHTML = '<p class="none">no wells found</p>';
+    return;
+  }
+
+  const cols = Object.keys(wells[0]);
+  const head = cols.map(c => `<th>${c}</th>`).join('');
+  const rows = wells.map(w => {
+    const tds = cols.map(c => {
+      const v = w[c] ?? '';
+      const cls = c === 'has_logs' ? (v === 'yes' ? ' class="yes"' : ' class="no"') : '';
+      return `<td${cls}>${v}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  document.getElementById('a-results').innerHTML =
+    `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+
+  const bounds = [];
+  wells.forEach(w => {
+    const wlat = parseFloat(w['Latitude'] || w['latitude'] || '');
+    const wlon = parseFloat(w['Longitude'] || w['longitude'] || '');
+    if (isNaN(wlat) || isNaN(wlon)) return;
+    const hasLogs = w['has_logs'] === 'yes';
+    L.circleMarker([wlat, wlon], {
+      radius: 7,
+      color:       hasLogs ? '#5d5' : '#555',
+      fillColor:   hasLogs ? '#5d5' : '#333',
+      fillOpacity: 0.85, weight: 1.5,
+    })
+    .bindPopup(`<b>${w['Well Serial Num'] || ''}</b> ${w['Well Name'] || ''}<br>has_logs: ${w['has_logs'] || '?'}`)
+    .addTo(leafletMap);
+    bounds.push([wlat, wlon]);
+  });
+
+  if (bounds.length) leafletMap.fitBounds(L.latLngBounds(bounds).pad(0.25));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+requests
+pyproj
+playwright
+fastapi
+uvicorn[standard]
+python-multipart
