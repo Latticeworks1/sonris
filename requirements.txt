@@ -4,3 +4,5 @@ playwright
 fastapi
 uvicorn[standard]
 python-multipart
+questionary
+rich
